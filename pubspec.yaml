@@ -1,0 +1,53 @@
+name: flutter_video_call_app
+description: "A Flutter video call application with Messenger-like UI"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.2
+  
+  # Appwrite Backend (upgraded to v20 for compatibility with ZegoCloud)
+  appwrite: ^20.0.0
+  
+  # Video Calling (using latest compatible version)
+  zego_uikit_prebuilt_call: ^4.21.1
+  
+  # UI & Utilities
+  cupertino_icons: ^1.0.8
+  cached_network_image: ^3.4.1
+  image_picker: ^1.1.2
+  intl: ^0.19.0
+  uuid: ^4.5.1
+  
+  # Navigation
+  go_router: ^14.6.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    
+  # Uncomment and add Inter font files to assets/fonts/ directory
+  # fonts:
+  #   - family: Inter
+  #     fonts:
+  #       - asset: assets/fonts/Inter-Regular.ttf
+  #       - asset: assets/fonts/Inter-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Inter-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Inter-Bold.ttf
+  #         weight: 700
