@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
-import '../../core/utils/date_formatter.dart';
-import '../providers/auth_provider.dart';
-import '../providers/friends_provider.dart';
-import '../widgets/user_avatar.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/utils/date_formatter.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/friends_provider.dart';
+import '../../widgets/user_avatar.dart';
 import 'chat_detail_screen.dart';
 
 /// Chat list screen showing all conversations

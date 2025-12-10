@@ -12,10 +12,18 @@ class AuthService {
   Future<UserModel> signInWithEmail(String email, String password) async {
     try {
       // Create session
-      await _appwrite.account.createEmailPasswordSession(
-        email: email,
-        password: password,
-      );
+      try {
+        await _appwrite.account.createEmailPasswordSession(
+          email: email,
+          password: password,
+        );
+      } on AppwriteException catch (e) {
+        if (e.type == 'user_session_already_exists') {
+          // Session already exists, ignore and proceed
+        } else {
+          rethrow;
+        }
+      }
 
       // Get current user
       return await getCurrentUser();
@@ -56,10 +64,18 @@ class AuthService {
       );
 
       // Sign in after registration
-      await _appwrite.account.createEmailPasswordSession(
-        email: email,
-        password: password,
-      );
+      try {
+        await _appwrite.account.createEmailPasswordSession(
+          email: email,
+          password: password,
+        );
+      } on AppwriteException catch (e) {
+        if (e.type == 'user_session_already_exists') {
+          // Session already exists, ignore and proceed
+        } else {
+          rethrow;
+        }
+      }
 
       return await getCurrentUser();
     } catch (e) {
@@ -135,11 +151,15 @@ class AuthService {
     required String userId,
     String? name,
     String? avatarUrl,
+    bool? isOnline,
+    DateTime? lastSeen,
   }) async {
     try {
       final data = <String, dynamic>{};
       if (name != null) data['name'] = name;
       if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
+      if (isOnline != null) data['isOnline'] = isOnline;
+      if (lastSeen != null) data['lastSeen'] = lastSeen.toIso8601String();
 
       await _appwrite.databases.updateDocument(
         databaseId: AppConstants.databaseId,

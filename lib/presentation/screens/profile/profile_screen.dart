@@ -1,18 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
-import '../providers/auth_provider.dart';
-import '../widgets/user_avatar.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/friends_provider.dart';
+import '../../widgets/user_avatar.dart';
 import 'edit_profile_screen.dart';
 
 /// Profile screen showing user information
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _refreshData();
+  }
+
+  Future<void> _refreshData() async {
+    final authProvider = context.read<AuthProvider>();
+    final friendsProvider = context.read<FriendsProvider>();
+    
+    if (authProvider.currentUser != null) {
+      await authProvider.refreshUser();
+      await friendsProvider.loadFriends(authProvider.currentUser!.id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final friendsProvider = context.watch<FriendsProvider>();
     final user = authProvider.currentUser;
 
     if (user == null) {
@@ -20,6 +43,9 @@ class ProfileScreen extends StatelessWidget {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    // Get actual friend count from FriendsProvider
+    final friendCount = friendsProvider.friends.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -32,13 +58,15 @@ class ProfileScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const EditProfileScreen(),
                 ),
               );
+              // Refresh data after returning from edit screen
+              _refreshData();
             },
           ),
         ],
@@ -81,7 +109,7 @@ class ProfileScreen extends StatelessWidget {
             _buildInfoCard(
               icon: Icons.people,
               title: 'Friends',
-              value: '${user.friends.length}',
+              value: '$friendCount',
               context: context,
             ),
             const SizedBox(height: 16),
@@ -90,6 +118,30 @@ class ProfileScreen extends StatelessWidget {
               title: 'Joined',
               value: _formatDate(user.createdAt),
               context: context,
+            ),
+            const SizedBox(height: 16),
+            
+            // Activity Status Toggle
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.grey.withOpacity(0.2)),
+              ),
+              child: SwitchListTile(
+                title: const Text('Activity Status'),
+                subtitle: const Text('Show when you are active'),
+                value: authProvider.isActivityStatusEnabled,
+                onChanged: (value) {
+                  authProvider.toggleActivityStatus(value);
+                },
+                secondary: Icon(
+                  Icons.circle,
+                  color: authProvider.isActivityStatusEnabled ? Colors.green : Colors.grey,
+                  size: 16,
+                ),
+              ),
             ),
             const SizedBox(height: 32),
 

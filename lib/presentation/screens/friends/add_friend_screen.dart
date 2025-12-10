@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
-import '../providers/auth_provider.dart';
-import '../providers/friends_provider.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_text_field.dart';
-import '../widgets/user_avatar.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/friends_provider.dart';
+import '../../widgets/custom_button.dart';
+import '../../../data/models/friend_request_model.dart';
+import '../../widgets/custom_text_field.dart';
+import '../../widgets/user_avatar.dart';
 
 /// Add friend screen - search and send friend requests
 class AddFriendScreen extends StatefulWidget {
@@ -25,9 +26,31 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
     super.dispose();
   }
 
-  void _onSearch() {
+  Future<void> _onSearch() async {
     final friendsProvider = context.read<FriendsProvider>();
-    friendsProvider.searchUsers(_searchController.text.trim());
+    final authProvider = context.read<AuthProvider>();
+    await friendsProvider.searchUsers(
+      _searchController.text.trim(),
+      currentUserId: authProvider.currentUser?.id,
+    );
+
+    if (!mounted) return;
+
+    if (friendsProvider.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(friendsProvider.errorMessage!),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } else if (friendsProvider.searchResults.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy người dùng với email này'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   @override
@@ -81,6 +104,20 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                         final isCurrentUser = user.id == authProvider.currentUser?.id;
                         final isFriend = friendsProvider.friends
                             .any((f) => f.id == user.id);
+                        
+                        // Check if we already sent a request to this user
+                        // We look for a request where toUserId == user.id
+                        final sentRequest = friendsProvider.sentRequests.firstWhere(
+                          (r) => r.toUserId == user.id,
+                          orElse: () => FriendRequestModel(
+                            id: '', 
+                            fromUserId: '', 
+                            toUserId: '', 
+                            timestamp: DateTime.now(), 
+                            status: FriendRequestStatus.accepted // Dummy status
+                          ),
+                        );
+                        final hasSentRequest = sentRequest.id.isNotEmpty && sentRequest.status == FriendRequestStatus.pending;
 
                         return ListTile(
                           leading: UserAvatar(
@@ -99,24 +136,45 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                               ? const Text('You', style: TextStyle(color: AppColors.grey))
                               : isFriend
                                   ? const Text('Friend', style: TextStyle(color: AppColors.success))
-                                  : TextButton(
-                                      onPressed: () async {
-                                        final success = await friendsProvider
-                                            .sendFriendRequest(
-                                          authProvider.currentUser!.id,
-                                          user.id,
-                                        );
-                                        if (success && context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Friend request sent!'),
-                                              backgroundColor: AppColors.success,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      child: const Text(AppStrings.sendRequest),
-                                    ),
+                                  : hasSentRequest
+                                      ? TextButton(
+                                          onPressed: () async {
+                                            final success = await friendsProvider.cancelFriendRequest(
+                                                sentRequest.id, 
+                                                authProvider.currentUser!.id
+                                            );
+                                            if (success && context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Request cancelled'),
+                                                  backgroundColor: Colors.orange,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          child: const Text(
+                                            'Cancel request',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        )
+                                      : TextButton(
+                                          onPressed: () async {
+                                            final success = await friendsProvider
+                                                .sendFriendRequest(
+                                              authProvider.currentUser!.id,
+                                              user.id,
+                                            );
+                                            if (success && context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text('Friend request sent!'),
+                                                  backgroundColor: AppColors.success,
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          child: const Text(AppStrings.sendRequest),
+                                        ),
                         );
                       },
                     ),

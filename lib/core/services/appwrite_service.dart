@@ -1,5 +1,4 @@
 import 'package:appwrite/appwrite.dart';
-import '../constants/app_constants.dart';
 
 /// Singleton class to manage Appwrite client
 class AppwriteService {
@@ -13,17 +12,22 @@ class AppwriteService {
   late final Storage _storage;
   late final Realtime _realtime;
 
-  /// Initialize Appwrite client
+  /// Initialize Appwrite client with hardcoded project details
   void init() {
     _client = Client()
-        .setEndpoint(AppConstants.appwriteEndpoint)
-        .setProject(AppConstants.appwriteProjectId)
+        .setProject("692ea196003c16a4b465")
+        .setEndpoint("https://sfo.cloud.appwrite.io/v1")
         .setSelfSigned(status: true); // For development only
 
     _account = Account(_client);
     _databases = Databases(_client);
     _storage = Storage(_client);
     _realtime = Realtime(_client);
+  }
+
+  /// Ping the Appwrite server
+  Future<void> ping() async {
+    await _client.ping();
   }
 
   /// Getters for Appwrite services

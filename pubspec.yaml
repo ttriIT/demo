@@ -18,6 +18,7 @@ dependencies:
   
   # Video Calling (using latest compatible version)
   zego_uikit_prebuilt_call: ^4.21.1
+  zego_uikit_signaling_plugin: ^2.7.0
   
   # UI & Utilities
   cupertino_icons: ^1.0.8
@@ -37,10 +38,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   
-  assets:
-    - assets/images/
+  # assets:
+  #   - assets/images/
     
-  # Uncomment and add Inter font files to assets/fonts/ directory
   # fonts:
   #   - family: Inter
   #     fonts:

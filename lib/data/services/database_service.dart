@@ -41,6 +41,25 @@ class DatabaseService {
     }
   }
 
+  /// Update user status
+  Future<void> updateUserStatus(String userId, {bool? isOnline, DateTime? lastSeen}) async {
+    try {
+      final data = <String, dynamic>{};
+      if (isOnline != null) data['isOnline'] = isOnline;
+      if (lastSeen != null) data['lastSeen'] = lastSeen.toIso8601String();
+
+      await _appwrite.databases.updateDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.usersCollectionId,
+        documentId: userId,
+        data: data,
+      );
+    } catch (e) {
+      // Silently fail for status updates
+      print('Failed to update user status: ${e.toString()}');
+    }
+  }
+
   /// Get user's friends
   Future<List<UserModel>> getUserFriends(String userId) async {
     try {
@@ -247,6 +266,74 @@ class DatabaseService {
     }
   }
 
+  /// Delete (Cancel) friend request
+  Future<void> deleteFriendRequest(String requestId) async {
+    try {
+      await _appwrite.databases.deleteDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.friendRequestsCollectionId,
+        documentId: requestId,
+      );
+    } catch (e) {
+      throw Exception('Failed to delete request: ${e.toString()}');
+    }
+  }
+
+  /// Get pending friend requests sent BY a user
+  Future<List<FriendRequestModel>> getSentPendingRequests(String userId) async {
+    try {
+      final response = await _appwrite.databases.listDocuments(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.friendRequestsCollectionId,
+        queries: [
+          Query.equal('fromUserId', userId),
+          Query.equal('status', 'pending'),
+          Query.orderDesc('timestamp'),
+        ],
+      );
+
+      return response.documents
+          .map((doc) => FriendRequestModel.fromDocument(doc))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get sent requests: ${e.toString()}');
+    }
+  }
+
+  /// Remove friend from both users' friends lists
+  Future<void> removeFriend(String userId, String friendId) async {
+    try {
+      // Get both users' documents
+      final userDoc = await getUserById(userId);
+      final friendDoc = await getUserById(friendId);
+
+      // Remove friend from user's friends list
+      final updatedUserFriends = List<String>.from(userDoc.friends)
+        ..remove(friendId);
+      
+      // Remove user from friend's friends list
+      final updatedFriendFriends = List<String>.from(friendDoc.friends)
+        ..remove(userId);
+
+      // Update both users' documents
+      await _appwrite.databases.updateDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.usersCollectionId,
+        documentId: userId,
+        data: {'friends': updatedUserFriends},
+      );
+
+      await _appwrite.databases.updateDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.usersCollectionId,
+        documentId: friendId,
+        data: {'friends': updatedFriendFriends},
+      );
+    } catch (e) {
+      throw Exception('Failed to remove friend: ${e.toString()}');
+    }
+  }
+
   /// Subscribe to real-time messages
   Stream<MessageModel> subscribeToMessages(String userId, String friendId) {
     final subscription = _appwrite.realtime.subscribe([
@@ -260,6 +347,21 @@ class DatabaseService {
       // Filter for current conversation only
       return (message.senderId == userId && message.receiverId == friendId) ||
              (message.senderId == friendId && message.receiverId == userId);
+    });
+  }
+
+  /// Subscribe to real-time friend requests
+  Stream<FriendRequestModel> subscribeToFriendRequests(String userId) {
+    final subscription = _appwrite.realtime.subscribe([
+      'databases.${AppConstants.databaseId}.collections.${AppConstants.friendRequestsCollectionId}.documents'
+    ]);
+
+    return subscription.stream.map((event) {
+      final doc = event.payload;
+      return FriendRequestModel.fromDocument(doc as dynamic);
+    }).where((request) {
+      // Filter for requests sent to current user
+      return request.toUserId == userId && request.status == FriendRequestStatus.pending;
     });
   }
 }

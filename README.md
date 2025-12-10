@@ -92,18 +92,18 @@ Edit `lib/core/constants/app_constants.dart`:
 
 ```dart
 // Appwrite Configuration
-static const String appwriteEndpoint = 'https://cloud.appwrite.io/v1'; // Or your self-hosted URL
-static const String appwriteProjectId = 'YOUR_PROJECT_ID_HERE';
+static const String appwriteEndpoint = 'https://sfo.cloud.appwrite.io/v1'; // Or your self-hosted URL
+static const String appwriteProjectId = '692ea196003c16a4b465';
 
 // Database and Collections (already configured)
-static const String databaseId = 'main_db';
+static const String databaseId = '692ea628001056db22e7';
 static const String usersCollectionId = 'users';
 static const String messagesCollectionId = 'messages';
 static const String friendRequestsCollectionId = 'friend_requests';
 
 // ZegoCloud Configuration
-static const int zegoAppId = YOUR_APP_ID_HERE; // Replace with your App ID (number)
-static const String zegoAppSign = 'YOUR_APP_SIGN_HERE'; // Replace with your App Sign
+static const int zegoAppId = 126390926; // Replace with your App ID (number)
+static const String zegoAppSign = '2c153d63fc34cd9508182ab7f972ca2ddb2675c9bf9c17d54f182b8c01487ce0'; // Replace with your App Sign
 ```
 
 ### 3. Add Font (Optional but Recommended)

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
-import '../../core/constants/app_constants.dart';
+import '../../../core/constants/app_constants.dart';
 
 /// Video call screen using ZegoCloud UIKit
 class VideoCallScreen extends StatelessWidget {
@@ -23,11 +23,7 @@ class VideoCallScreen extends StatelessWidget {
       userID: currentUserId,
       userName: currentUserName,
       callID: callId,
-      config: ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
-        ..onOnlySelfInRoom = (context) {
-          // Auto navigate back when user is alone
-          Navigator.of(context).pop();
-        },
+      config: ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall(),
     );
   }
 }

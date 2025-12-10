@@ -4,6 +4,7 @@ import 'core/services/appwrite_service.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/chat_provider.dart';
 import 'presentation/providers/friends_provider.dart';
+import 'presentation/providers/call_provider.dart';
 import 'app.dart';
 
 void main() async {
@@ -18,8 +19,22 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => FriendsProvider()),
+        ChangeNotifierProvider(create: (_) => CallProvider()),
       ],
-      child: const MyApp(),
+      child: Builder(
+        builder: (context) {
+          return Listener(
+            onPointerDown: (_) {
+               context.read<AuthProvider>().resetInactivityTimer();
+            },
+            onPointerMove: (_) {
+               // Throttle this if needed, but for now simple reset
+               context.read<AuthProvider>().resetInactivityTimer();
+            },
+            child: const MyApp(),
+          );
+        }
+      ),
     ),
   );
 
@@ -27,7 +42,21 @@ void main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final context = navigatorKey.currentContext;
     if (context != null) {
-      await context.read<AuthProvider>().checkAuthStatus();
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.checkAuthStatus();
+      
+      // Initialize ZegoUIKit if user is authenticated
+      if (authProvider.isAuthenticated && authProvider.currentUser != null) {
+        final callProvider = context.read<CallProvider>();
+        try {
+          await callProvider.initialize(
+            userId: authProvider.currentUser!.id,
+            userName: authProvider.currentUser!.name,
+          );
+        } catch (e) {
+          print('Failed to initialize ZegoUIKit: $e');
+        }
+      }
     }
   });
 }
