@@ -19,7 +19,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => FriendsProvider()),
-        ChangeNotifierProvider(create: (_) => CallProvider()),
+        ChangeNotifierProvider(create: (_) => CallProvider()), // Added CallProvider
       ],
       child: Builder(
         builder: (context) {
@@ -28,10 +28,9 @@ void main() async {
                context.read<AuthProvider>().resetInactivityTimer();
             },
             onPointerMove: (_) {
-               // Throttle this if needed, but for now simple reset
                context.read<AuthProvider>().resetInactivityTimer();
             },
-            child: const MyApp(),
+            child: MyApp(navigatorKey: navigatorKey),
           );
         }
       ),
@@ -52,6 +51,7 @@ void main() async {
           await callProvider.initialize(
             userId: authProvider.currentUser!.id,
             userName: authProvider.currentUser!.name,
+            navigatorKey: navigatorKey,
           );
         } catch (e) {
           print('Failed to initialize ZegoUIKit: $e');

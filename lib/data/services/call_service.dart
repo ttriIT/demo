@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 import '../../core/constants/app_constants.dart';
@@ -14,6 +15,7 @@ class CallService {
   Future<void> initialize({
     required String userId,
     required String userName,
+    required GlobalKey<NavigatorState> navigatorKey,
   }) async {
     if (_isInitialized) return;
 
@@ -26,6 +28,9 @@ class CallService {
         userName: userName,
         plugins: [ZegoUIKitSignalingPlugin()],
       );
+      
+      // Set navigator key for overlay support
+      ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
 
       _isInitialized = true;
     } catch (e) {

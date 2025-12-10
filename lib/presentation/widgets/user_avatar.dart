@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/constants/app_colors.dart';
@@ -33,18 +32,12 @@ class UserAvatar extends StatelessWidget {
           ),
           child: imageUrl != null && imageUrl!.isNotEmpty
               ? ClipOval(
-                  child: imageUrl!.startsWith('http')
-                      ? CachedNetworkImage(
-                          imageUrl: imageUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => _buildPlaceholder(),
-                          errorWidget: (context, url, error) => _buildPlaceholder(),
-                        )
-                      : Image.file(
-                          File(imageUrl!),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-                        ),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => _buildPlaceholder(),
+                    errorWidget: (context, url, error) => _buildPlaceholder(),
+                  ),
                 )
               : _buildPlaceholder(),
         ),

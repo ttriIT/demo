@@ -1,5 +1,4 @@
 import 'package:appwrite/appwrite.dart';
-import 'package:appwrite/models.dart' as models;
 import '../../core/services/appwrite_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/user_model.dart';
@@ -124,6 +123,7 @@ class AuthService {
       await _appwrite.account.get();
       return true;
     } catch (e) {
+      // Return false for any authentication errors (session expired, not logged in, etc.)
       return false;
     }
   }

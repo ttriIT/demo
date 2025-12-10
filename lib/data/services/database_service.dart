@@ -25,7 +25,7 @@ class DatabaseService {
     }
   }
 
-  /// Search users by email
+  /// Search users by email - returns unique users only (limit 1 for exact match)
   Future<List<UserModel>> searchUsersByEmail(String email) async {
     try {
       final response = await _appwrite.databases.listDocuments(
@@ -33,30 +33,27 @@ class DatabaseService {
         collectionId: AppConstants.usersCollectionId,
         queries: [
           Query.search('email', email),
+          Query.limit(10), // Limit results to avoid duplicates
         ],
       );
-      return response.documents.map((doc) => UserModel.fromDocument(doc)).toList();
+
+      // Filter for exact email match and remove duplicates
+      final exactEmail = email.trim().toLowerCase();
+      final uniqueUsers = <String, UserModel>{};
+
+      for (final doc in response.documents) {
+        final user = UserModel.fromDocument(doc);
+        final userEmail = user.email.toLowerCase();
+
+        // Only add if exact match and not already in map
+        if (userEmail == exactEmail && !uniqueUsers.containsKey(user.id)) {
+          uniqueUsers[user.id] = user;
+        }
+      }
+
+      return uniqueUsers.values.toList();
     } catch (e) {
       throw Exception('Search failed: ${e.toString()}');
-    }
-  }
-
-  /// Update user status
-  Future<void> updateUserStatus(String userId, {bool? isOnline, DateTime? lastSeen}) async {
-    try {
-      final data = <String, dynamic>{};
-      if (isOnline != null) data['isOnline'] = isOnline;
-      if (lastSeen != null) data['lastSeen'] = lastSeen.toIso8601String();
-
-      await _appwrite.databases.updateDocument(
-        databaseId: AppConstants.databaseId,
-        collectionId: AppConstants.usersCollectionId,
-        documentId: userId,
-        data: data,
-      );
-    } catch (e) {
-      // Silently fail for status updates
-      print('Failed to update user status: ${e.toString()}');
     }
   }
 
@@ -69,8 +66,9 @@ class DatabaseService {
         documentId: userId,
       );
 
-      final friendIds = List<String>.from(userDoc.data['friends'] as List? ?? []);
-      
+      final friendIds =
+          List<String>.from(userDoc.data['friends'] as List? ?? []);
+
       if (friendIds.isEmpty) return [];
 
       // Fetch all friends
@@ -84,7 +82,7 @@ class DatabaseService {
           continue;
         }
       }
-      
+
       return friends;
     } catch (e) {
       throw Exception('Failed to get friends: ${e.toString()}');
@@ -220,7 +218,8 @@ class DatabaseService {
   }
 
   /// Accept friend request
-  Future<void> acceptFriendRequest(String requestId, String userId, String friendId) async {
+  Future<void> acceptFriendRequest(
+      String requestId, String userId, String friendId) async {
     try {
       // Update request status
       await _appwrite.databases.updateDocument(
@@ -238,14 +237,18 @@ class DatabaseService {
         databaseId: AppConstants.databaseId,
         collectionId: AppConstants.usersCollectionId,
         documentId: userId,
-        data: {'friends': [...userDoc.friends, friendId]},
+        data: {
+          'friends': [...userDoc.friends, friendId]
+        },
       );
 
       await _appwrite.databases.updateDocument(
         databaseId: AppConstants.databaseId,
         collectionId: AppConstants.usersCollectionId,
         documentId: friendId,
-        data: {'friends': [...friendDoc.friends, userId]},
+        data: {
+          'friends': [...friendDoc.friends, userId]
+        },
       );
     } catch (e) {
       throw Exception('Failed to accept request: ${e.toString()}');
@@ -266,21 +269,8 @@ class DatabaseService {
     }
   }
 
-  /// Delete (Cancel) friend request
-  Future<void> deleteFriendRequest(String requestId) async {
-    try {
-      await _appwrite.databases.deleteDocument(
-        databaseId: AppConstants.databaseId,
-        collectionId: AppConstants.friendRequestsCollectionId,
-        documentId: requestId,
-      );
-    } catch (e) {
-      throw Exception('Failed to delete request: ${e.toString()}');
-    }
-  }
-
-  /// Get pending friend requests sent BY a user
-  Future<List<FriendRequestModel>> getSentPendingRequests(String userId) async {
+  /// Get pending friend requests sent by a user
+  Future<List<FriendRequestModel>> getSentRequests(String userId) async {
     try {
       final response = await _appwrite.databases.listDocuments(
         databaseId: AppConstants.databaseId,
@@ -300,22 +290,72 @@ class DatabaseService {
     }
   }
 
-  /// Remove friend from both users' friends lists
+  /// Subscribe to real-time messages
+  Stream<MessageModel> subscribeToMessages(String userId, String friendId) {
+    final subscription = _appwrite.realtime.subscribe([
+      'databases.${AppConstants.databaseId}.collections.${AppConstants.messagesCollectionId}.documents'
+    ]);
+
+    return subscription.stream.map((event) {
+      final doc = event.payload;
+      return MessageModel.fromDocument(doc as dynamic);
+    }).where((message) {
+      // Filter for current conversation only
+      return (message.senderId == userId && message.receiverId == friendId) ||
+          (message.senderId == friendId && message.receiverId == userId);
+    });
+  }
+
+  /// Subscribe to real-time friend requests
+  Stream<FriendRequestModel> subscribeToFriendRequests(String userId) {
+    final subscription = _appwrite.realtime.subscribe([
+      'databases.${AppConstants.databaseId}.collections.${AppConstants.friendRequestsCollectionId}.documents'
+    ]);
+
+    return subscription.stream.map((event) {
+      final doc = event.payload;
+      return FriendRequestModel.fromDocument(doc as dynamic);
+    }).where((request) {
+      // Filter for requests sent to current user
+      return request.toUserId == userId &&
+          request.status == FriendRequestStatus.pending;
+    });
+  }
+
+  /// Update user's online status and last seen timestamp
+  Future<void> updateUserStatus(String userId, bool isOnline) async {
+    try {
+      await _appwrite.databases.updateDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.usersCollectionId,
+        documentId: userId,
+        data: {
+          'isOnline': isOnline,
+          'lastSeen': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (e) {
+      print('Failed to update user status: ${e.toString()}');
+      // Silently fail - non-critical operation
+    }
+  }
+
+  /// Remove friend from both users
   Future<void> removeFriend(String userId, String friendId) async {
     try {
-      // Get both users' documents
+      // Get current friends lists
       final userDoc = await getUserById(userId);
       final friendDoc = await getUserById(friendId);
 
-      // Remove friend from user's friends list
+      // Remove friend from user's list
       final updatedUserFriends = List<String>.from(userDoc.friends)
         ..remove(friendId);
-      
-      // Remove user from friend's friends list
+
+      // Remove user from friend's list
       final updatedFriendFriends = List<String>.from(friendDoc.friends)
         ..remove(userId);
 
-      // Update both users' documents
+      // Update both users
       await _appwrite.databases.updateDocument(
         databaseId: AppConstants.databaseId,
         collectionId: AppConstants.usersCollectionId,
@@ -332,36 +372,5 @@ class DatabaseService {
     } catch (e) {
       throw Exception('Failed to remove friend: ${e.toString()}');
     }
-  }
-
-  /// Subscribe to real-time messages
-  Stream<MessageModel> subscribeToMessages(String userId, String friendId) {
-    final subscription = _appwrite.realtime.subscribe([
-      'databases.${AppConstants.databaseId}.collections.${AppConstants.messagesCollectionId}.documents'
-    ]);
-
-    return subscription.stream.map((event) {
-      final doc = event.payload;
-      return MessageModel.fromDocument(doc as dynamic);
-    }).where((message) {
-      // Filter for current conversation only
-      return (message.senderId == userId && message.receiverId == friendId) ||
-             (message.senderId == friendId && message.receiverId == userId);
-    });
-  }
-
-  /// Subscribe to real-time friend requests
-  Stream<FriendRequestModel> subscribeToFriendRequests(String userId) {
-    final subscription = _appwrite.realtime.subscribe([
-      'databases.${AppConstants.databaseId}.collections.${AppConstants.friendRequestsCollectionId}.documents'
-    ]);
-
-    return subscription.stream.map((event) {
-      final doc = event.payload;
-      return FriendRequestModel.fromDocument(doc as dynamic);
-    }).where((request) {
-      // Filter for requests sent to current user
-      return request.toUserId == userId && request.status == FriendRequestStatus.pending;
-    });
   }
 }

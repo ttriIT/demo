@@ -7,11 +7,17 @@ import 'presentation/screens/home/home_screen.dart';
 
 /// Root app widget with auth state management
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final GlobalKey<NavigatorState> navigatorKey;
+  
+  const MyApp({
+    super.key,
+    required this.navigatorKey,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Video Call App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

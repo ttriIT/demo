@@ -5,11 +5,8 @@ import '../../../core/constants/app_strings.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/call_provider.dart';
-import '../../providers/friends_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/message_bubble.dart';
-import '../call/video_call_screen.dart';
 
 /// Chat detail screen for one-on-one conversation
 class ChatDetailScreen extends StatefulWidget {
@@ -39,8 +36,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _loadMessages() async {
     final chatProvider = context.read<ChatProvider>();
     await chatProvider.loadMessages(widget.currentUserId, widget.friend.id);
-    chatProvider.subscribeToConversation(
-        widget.currentUserId, widget.friend.id);
+    chatProvider.subscribeToConversation(widget.currentUserId, widget.friend.id);
     _scrollToBottom();
   }
 
@@ -72,62 +68,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _scrollToBottom();
   }
 
-  Future<void> _initiateVideoCall() async {
-    final callProvider = context.read<CallProvider>();
-    final authProvider = context.read<AuthProvider>();
-    final friendsProvider = context.read<FriendsProvider>();
-
-    if (authProvider.currentUser == null) return;
-
-    // Get updated friend data
-    final friend =
-        friendsProvider.getFriendById(widget.friend.id) ?? widget.friend;
-
-    // Generate consistent call ID (sorted to ensure same ID for both users)
-    final userIds = [widget.currentUserId, friend.id]..sort();
-    final callId = '${userIds[0]}_${userIds[1]}';
-
-    try {
-      await callProvider.sendCallInvitation(
-        targetUser: friend,
-        callId: callId,
-        isVideoCall: true,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initiate call: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     final chatProvider = context.read<ChatProvider>();
-    chatProvider.unsubscribeFromConversation(
-        widget.currentUserId, widget.friend.id);
+    chatProvider.unsubscribeFromConversation(widget.currentUserId, widget.friend.id);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final chatProvider = context.watch<ChatProvider>();
-    final friendsProvider = context.watch<FriendsProvider>();
     final messages = chatProvider.getConversationMessages(
       widget.currentUserId,
       widget.friend.id,
     );
-
-    // Get updated friend data from FriendsProvider if available
-    final friend =
-        friendsProvider.getFriendById(widget.friend.id) ?? widget.friend;
-    final isOnline = friend.isOnline;
 
     return Scaffold(
       appBar: AppBar(
@@ -140,11 +96,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         title: Row(
           children: [
             UserAvatar(
-              imageUrl: friend.avatarUrl,
-              name: friend.name,
+              imageUrl: widget.friend.avatarUrl,
+              name: widget.friend.name,
               size: 40,
               showOnlineIndicator: true,
-              isOnline: isOnline,
+              isOnline: widget.friend.isOnline,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -152,14 +108,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    friend.name,
+                    widget.friend.name,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
-                    isOnline ? 'Active now' : 'Offline',
+                    widget.friend.isOnline ? 'Active now' : 'Offline',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.grey,
@@ -171,9 +127,57 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ],
         ),
         actions: [
+          // Voice Call Button
+          IconButton(
+            icon: const Icon(Icons.call, color: AppColors.primaryBlue),
+            onPressed: () async {
+              final callProvider = context.read<CallProvider>();
+              final callId = 'voice_${widget.currentUserId}_${widget.friend.id}_${DateTime.now().millisecondsSinceEpoch}';
+              
+              try {
+                await callProvider.sendCallInvitation(
+                  targetUserId: widget.friend.id,
+                  targetUserName: widget.friend.name,
+                  callId: callId,
+                  isVideoCall: false,
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to start voice call: ${e.toString()}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+          // Video Call Button
           IconButton(
             icon: const Icon(Icons.videocam, color: AppColors.primaryBlue),
-            onPressed: _initiateVideoCall,
+            onPressed: () async {
+              final callProvider = context.read<CallProvider>();
+              final callId = 'video_${widget.currentUserId}_${widget.friend.id}_${DateTime.now().millisecondsSinceEpoch}';
+              
+              try {
+                await callProvider.sendCallInvitation(
+                  targetUserId: widget.friend.id,
+                  targetUserName: widget.friend.name,
+                  callId: callId,
+                  isVideoCall: true,
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to start video call: ${e.toString()}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
           ),
         ],
       ),

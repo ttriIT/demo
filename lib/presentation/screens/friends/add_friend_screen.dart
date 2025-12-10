@@ -31,8 +31,11 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
     final authProvider = context.read<AuthProvider>();
     await friendsProvider.searchUsers(
       _searchController.text.trim(),
-      currentUserId: authProvider.currentUser?.id,
     );
+    // Also load sent requests for the current user
+    if (authProvider.currentUser != null) {
+      await friendsProvider.loadSentRequests(authProvider.currentUser!.id);
+    }
 
     if (!mounted) return;
 
@@ -101,23 +104,27 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                       itemCount: friendsProvider.searchResults.length,
                       itemBuilder: (context, index) {
                         final user = friendsProvider.searchResults[index];
-                        final isCurrentUser = user.id == authProvider.currentUser?.id;
-                        final isFriend = friendsProvider.friends
-                            .any((f) => f.id == user.id);
-                        
+                        final isCurrentUser =
+                            user.id == authProvider.currentUser?.id;
+                        final isFriend =
+                            friendsProvider.friends.any((f) => f.id == user.id);
+
                         // Check if we already sent a request to this user
                         // We look for a request where toUserId == user.id
-                        final sentRequest = friendsProvider.sentRequests.firstWhere(
+                        final sentRequest =
+                            friendsProvider.sentRequests.firstWhere(
                           (r) => r.toUserId == user.id,
                           orElse: () => FriendRequestModel(
-                            id: '', 
-                            fromUserId: '', 
-                            toUserId: '', 
-                            timestamp: DateTime.now(), 
-                            status: FriendRequestStatus.accepted // Dummy status
-                          ),
+                              id: '',
+                              fromUserId: '',
+                              toUserId: '',
+                              timestamp: DateTime.now(),
+                              status:
+                                  FriendRequestStatus.accepted // Dummy status
+                              ),
                         );
-                        final hasSentRequest = sentRequest.id.isNotEmpty && sentRequest.status == FriendRequestStatus.pending;
+                        final hasSentRequest = sentRequest.id.isNotEmpty &&
+                            sentRequest.status == FriendRequestStatus.pending;
 
                         return ListTile(
                           leading: UserAvatar(
@@ -133,21 +140,32 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                             style: const TextStyle(color: AppColors.grey),
                           ),
                           trailing: isCurrentUser
-                              ? const Text('You', style: TextStyle(color: AppColors.grey))
+                              ? const Text('You',
+                                  style: TextStyle(color: AppColors.grey))
                               : isFriend
-                                  ? const Text('Friend', style: TextStyle(color: AppColors.success))
+                                  ? const Text('Friend',
+                                      style:
+                                          TextStyle(color: AppColors.success))
                                   : hasSentRequest
                                       ? TextButton(
                                           onPressed: () async {
-                                            final success = await friendsProvider.cancelFriendRequest(
-                                                sentRequest.id, 
-                                                authProvider.currentUser!.id
-                                            );
+                                            final success =
+                                                await friendsProvider
+                                                    .cancelFriendRequest(
+                                                        sentRequest.id,
+                                                        authProvider
+                                                            .currentUser!.id);
                                             if (success && context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
+                                              // Reload sent requests to update UI
+                                              await friendsProvider.loadSentRequests(authProvider.currentUser!.id);
+                                              setState(() {}); // Refresh UI
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
                                                 const SnackBar(
-                                                  content: Text('Request cancelled'),
-                                                  backgroundColor: Colors.orange,
+                                                  content:
+                                                      Text('Request cancelled'),
+                                                  backgroundColor:
+                                                      Colors.orange,
                                                 ),
                                               );
                                             }
@@ -159,21 +177,29 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                                         )
                                       : TextButton(
                                           onPressed: () async {
-                                            final success = await friendsProvider
-                                                .sendFriendRequest(
+                                            final success =
+                                                await friendsProvider
+                                                    .sendFriendRequest(
                                               authProvider.currentUser!.id,
                                               user.id,
                                             );
                                             if (success && context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
+                                              // Reload sent requests to update UI
+                                              await friendsProvider.loadSentRequests(authProvider.currentUser!.id);
+                                              setState(() {}); // Refresh UI
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
                                                 const SnackBar(
-                                                  content: Text('Friend request sent!'),
-                                                  backgroundColor: AppColors.success,
+                                                  content: Text(
+                                                      'Friend request sent!'),
+                                                  backgroundColor:
+                                                      AppColors.success,
                                                 ),
                                               );
                                             }
                                           },
-                                          child: const Text(AppStrings.sendRequest),
+                                          child: const Text(
+                                              AppStrings.sendRequest),
                                         ),
                         );
                       },

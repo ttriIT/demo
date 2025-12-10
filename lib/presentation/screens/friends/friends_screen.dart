@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
-import '../../../data/models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/friends_provider.dart';
 import '../../widgets/user_avatar.dart';
 import 'add_friend_screen.dart';
+import '../../../data/services/database_service.dart';
+import '../../../data/models/user_model.dart';
+import '../chat/chat_detail_screen.dart';
 
 /// Friends screen with friends list and friend requests
 class FriendsScreen extends StatefulWidget {
@@ -30,90 +32,6 @@ class _FriendsScreenState extends State<FriendsScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  void _showFriendOptions(
-    BuildContext context,
-    UserModel friend,
-    AuthProvider authProvider,
-    FriendsProvider friendsProvider,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.person_remove, color: AppColors.error),
-              title: const Text('Xóa bạn'),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmRemoveFriend(context, friend, authProvider, friendsProvider);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.cancel),
-              title: const Text('Hủy'),
-              onTap: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _confirmRemoveFriend(
-    BuildContext context,
-    UserModel friend,
-    AuthProvider authProvider,
-    FriendsProvider friendsProvider,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xóa bạn'),
-        content: Text('Bạn có chắc chắn muốn xóa ${friend.name} khỏi danh sách bạn bè?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.error,
-            ),
-            child: const Text('Xóa'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && authProvider.currentUser != null) {
-      final success = await friendsProvider.removeFriend(
-        authProvider.currentUser!.id,
-        friend.id,
-        onSuccess: () {
-          // Refresh user data after removing friend
-          authProvider.refreshUser();
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? 'Đã xóa ${friend.name} khỏi danh sách bạn bè'
-                  : 'Không thể xóa bạn: ${friendsProvider.errorMessage ?? "Lỗi không xác định"}',
-            ),
-            backgroundColor: success ? AppColors.success : AppColors.error,
-          ),
-        );
-      }
-    }
   }
 
   @override
@@ -162,7 +80,8 @@ class _FriendsScreenState extends State<FriendsScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.people_outline, size: 80, color: AppColors.grey),
+                      Icon(Icons.people_outline,
+                          size: 80, color: AppColors.grey),
                       SizedBox(height: 16),
                       Text(
                         AppStrings.noFriends,
@@ -175,93 +94,81 @@ class _FriendsScreenState extends State<FriendsScreen>
                   itemCount: friendsProvider.friends.length,
                   itemBuilder: (context, index) {
                     final friend = friendsProvider.friends[index];
-                    return Dismissible(
-                      key: Key(friend.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        decoration: BoxDecoration(
-                          color: AppColors.error,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.delete,
-                          color: AppColors.white,
+                    return ListTile(
+                      leading: UserAvatar(
+                        imageUrl: friend.avatarUrl,
+                        name: friend.name,
+                        showOnlineIndicator: true,
+                        isOnline: friend.isOnline,
+                      ),
+                      title: Text(
+                        friend.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        friend.email,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.grey,
                         ),
                       ),
-                      confirmDismiss: (direction) async {
-                        // Show confirmation dialog
-                        return await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Xóa bạn'),
-                            content: Text('Bạn có chắc chắn muốn xóa ${friend.name} khỏi danh sách bạn bè?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Hủy'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.error,
+                      trailing: IconButton(
+                        icon:
+                            const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () async {
+                          // Confirmation dialog
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Xóa bạn'),
+                              content: Text(
+                                  'Bạn có chắc chắn muốn xóa ${friend.name} khỏi danh sách bạn bè?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Hủy'),
                                 ),
-                                child: const Text('Xóa'),
-                              ),
-                            ],
-                          ),
-                        ) ?? false;
-                      },
-                      onDismissed: (direction) async {
-                        if (authProvider.currentUser != null) {
-                          final success = await friendsProvider.removeFriend(
-                            authProvider.currentUser!.id,
-                            friend.id,
-                            onSuccess: () {
-                              // Refresh user data after removing friend
-                              authProvider.refreshUser();
-                            },
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text(
+                                    'Xóa',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
                           );
 
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  success
-                                      ? 'Đã xóa ${friend.name} khỏi danh sách bạn bè'
-                                      : 'Không thể xóa bạn: ${friendsProvider.errorMessage ?? "Lỗi không xác định"}',
-                                ),
-                                backgroundColor: success
-                                    ? AppColors.success
-                                    : AppColors.error,
-                              ),
+                          if (confirmed == true && mounted) {
+                            final success = await friendsProvider.removeFriend(
+                              authProvider.currentUser!.id,
+                              friend.id,
                             );
+
+                            if (success && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Removed ${friend.name} from friends'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
                           }
-                        }
-                      },
-                      child: ListTile(
-                        leading: UserAvatar(
-                          imageUrl: friend.avatarUrl,
-                          name: friend.name,
-                          showOnlineIndicator: true,
-                          isOnline: friend.isOnline,
-                        ),
-                        title: Text(
-                          friend.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          friend.email,
-                          style: const TextStyle(fontSize: 13, color: AppColors.grey),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.more_vert, color: AppColors.grey),
-                          onPressed: () {
-                            _showFriendOptions(context, friend, authProvider, friendsProvider);
-                          },
-                        ),
+                        },
                       ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatDetailScreen(
+                              friend: friend,
+                              currentUserId: authProvider.currentUser!.id,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -269,10 +176,11 @@ class _FriendsScreenState extends State<FriendsScreen>
           // Friend Requests Tab
           friendsProvider.pendingRequests.isEmpty
               ? const Center(
-                  child:Column(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inbox_outlined, size: 80, color: AppColors.grey),
+                      Icon(Icons.inbox_outlined,
+                          size: 80, color: AppColors.grey),
                       SizedBox(height: 6),
                       Text(
                         AppStrings.noRequests,
@@ -285,41 +193,84 @@ class _FriendsScreenState extends State<FriendsScreen>
                   itemCount: friendsProvider.pendingRequests.length,
                   itemBuilder: (context, index) {
                     final request = friendsProvider.pendingRequests[index];
-                    return FutureBuilder(
-                      future: context
-                          .read<FriendsProvider>()
-                          .searchUsers(request.fromUserId),
+                    return FutureBuilder<UserModel>(
+                      future: DatabaseService().getUserById(request.fromUserId),
                       builder: (context, snapshot) {
-                        // Simple placeholder while loading
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return ListTile(
+                            leading: const UserAvatar(
+                              name: 'Loading...',
+                              size: 50,
+                            ),
+                            title: const Text('Loading...'),
+                            subtitle: const Text('Loading user information'),
+                          );
+                        }
+
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return ListTile(
+                            leading: const UserAvatar(
+                              name: 'Unknown',
+                              size: 50,
+                            ),
+                            title: const Text('Unknown User'),
+                            subtitle: Text(
+                                'ID: ${request.fromUserId.substring(0, 8)}...'),
+                          );
+                        }
+
+                        final user = snapshot.data!;
                         return ListTile(
-                          leading: const UserAvatar(
-                            name: 'User',
+                          leading: UserAvatar(
+                            imageUrl: user.avatarUrl,
+                            name: user.name,
                             size: 50,
                           ),
-                          title: Text('Friend Request'),
-                          subtitle: Text('ID: ${request.fromUserId.substring(0, 8)}...'),
+                          title: Text(user.name),
+                          subtitle: Text(user.email),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               TextButton(
                                 onPressed: () async {
-                                  await friendsProvider.acceptFriendRequest(
+                                  final success =
+                                      await friendsProvider.acceptFriendRequest(
                                     request.id,
                                     authProvider.currentUser!.id,
                                     request.fromUserId,
-                                    onSuccess: () {
-                                      // Refresh user data after accepting friend request
-                                      authProvider.refreshUser();
-                                    },
                                   );
+                                  if (success && mounted) {
+                                    // Refresh the entire screen to update both tabs
+                                    setState(() {});
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content:
+                                            Text('Friend request accepted!'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  }
                                 },
                                 child: const Text(AppStrings.accept),
                               ),
                               TextButton(
                                 onPressed: () async {
-                                  await friendsProvider.declineFriendRequest(
+                                  final success = await friendsProvider
+                                      .declineFriendRequest(
                                     request.id,
                                   );
+                                  if (success && mounted) {
+                                    // Remove the request from UI immediately
+                                    setState(() {});
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content:
+                                            Text('Friend request declined'),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                  }
                                 },
                                 style: TextButton.styleFrom(
                                   foregroundColor: AppColors.error,

@@ -7,19 +7,21 @@ import '../../data/services/database_service.dart';
 /// Friends state provider
 class FriendsProvider with ChangeNotifier {
   final DatabaseService _databaseService = DatabaseService();
-  
+
   List<UserModel> _friends = [];
   List<FriendRequestModel> _pendingRequests = [];
   List<UserModel> _searchResults = [];
   bool _isLoading = false;
   String? _errorMessage;
   StreamSubscription<FriendRequestModel>? _requestSubscription;
+  List<FriendRequestModel> _sentRequests = [];
 
   List<UserModel> get friends => _friends;
   List<FriendRequestModel> get pendingRequests => _pendingRequests;
   List<UserModel> get searchResults => _searchResults;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  List<FriendRequestModel> get sentRequests => _sentRequests;
 
   @override
   void dispose() {
@@ -43,9 +45,6 @@ class FriendsProvider with ChangeNotifier {
     }
   }
 
-  List<FriendRequestModel> _sentRequests = [];
-  List<FriendRequestModel> get sentRequests => _sentRequests;
-
   /// Load pending friend requests
   Future<void> loadPendingRequests(String userId) async {
     try {
@@ -55,7 +54,8 @@ class FriendsProvider with ChangeNotifier {
 
       // Subscribe to realtime updates
       _requestSubscription?.cancel();
-      _requestSubscription = _databaseService.subscribeToFriendRequests(userId).listen(
+      _requestSubscription =
+          _databaseService.subscribeToFriendRequests(userId).listen(
         (request) {
           if (!_pendingRequests.any((r) => r.id == request.id)) {
             _pendingRequests.insert(0, request);
@@ -72,18 +72,8 @@ class FriendsProvider with ChangeNotifier {
     }
   }
 
-  /// Load requests sent BY current user
-  Future<void> loadSentRequests(String userId) async {
-    try {
-      _sentRequests = await _databaseService.getSentPendingRequests(userId);
-      notifyListeners();
-    } catch (e) {
-      print('Failed to load sent requests: $e');
-    }
-  }
-
   /// Search users by email
-  Future<void> searchUsers(String email, {String? currentUserId}) async {
+  Future<void> searchUsers(String email) async {
     if (email.trim().isEmpty) {
       _searchResults = [];
       notifyListeners();
@@ -95,11 +85,6 @@ class FriendsProvider with ChangeNotifier {
 
     try {
       _searchResults = await _databaseService.searchUsersByEmail(email);
-      // Reload sent requests to ensure UI is up to date if we searched and found
-      // someone we already sent a request to.
-      if (currentUserId != null) {
-        await loadSentRequests(currentUserId);
-      }
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -116,8 +101,6 @@ class FriendsProvider with ChangeNotifier {
         fromUserId: fromUserId,
         toUserId: toUserId,
       );
-      // Add to local list or reload
-      await loadSentRequests(fromUserId);
       return true;
     } catch (e) {
       _errorMessage = e.toString();
@@ -126,35 +109,25 @@ class FriendsProvider with ChangeNotifier {
     }
   }
 
-  /// Cancel friend request
-  Future<bool> cancelFriendRequest(String requestId, String userId) async {
-     try {
-       await _databaseService.deleteFriendRequest(requestId);
-       // Remove from local list
-       _sentRequests.removeWhere((r) => r.id == requestId);
-       notifyListeners();
-       return true;
-     } catch (e) {
-       _errorMessage = e.toString();
-       notifyListeners();
-       return false;
-     }
-  }
-
   /// Accept friend request
   Future<bool> acceptFriendRequest(
     String requestId,
     String userId,
-    String friendId, {
-    Function()? onSuccess,
-  }) async {
+    String friendId,
+  ) async {
     try {
       await _databaseService.acceptFriendRequest(requestId, userId, friendId);
-      // Refresh lists
+
+      // Remove from pending requests
+      _pendingRequests.removeWhere((r) => r.id == requestId);
+
+      // Force reload friends list to ensure new friend appears
       await loadFriends(userId);
+
+      // Reload pending requests to ensure UI updates
       await loadPendingRequests(userId);
-      // Call onSuccess callback to refresh user data in AuthProvider
-      onSuccess?.call();
+
+      notifyListeners();
       return true;
     } catch (e) {
       _errorMessage = e.toString();
@@ -167,9 +140,40 @@ class FriendsProvider with ChangeNotifier {
   Future<bool> declineFriendRequest(String requestId) async {
     try {
       await _databaseService.declineFriendRequest(requestId);
-      // Remove from list
+
+      // Immediately remove from both lists for instant UI update
       _pendingRequests.removeWhere((r) => r.id == requestId);
+      _sentRequests.removeWhere((r) => r.id == requestId);
+
       notifyListeners();
+
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Load friend requests sent by current user
+  Future<void> loadSentRequests(String userId) async {
+    try {
+      _sentRequests = await _databaseService.getSentRequests(userId);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+    }
+  }
+
+  /// Cancel (decline) a sent friend request
+  Future<bool> cancelFriendRequest(String requestId, String userId) async {
+    try {
+      await _databaseService.declineFriendRequest(requestId);
+      _sentRequests.removeWhere((r) => r.id == requestId);
+      notifyListeners();
+      // Optionally reload sent requests for full sync:
+      await loadSentRequests(userId);
       return true;
     } catch (e) {
       _errorMessage = e.toString();
@@ -179,19 +183,14 @@ class FriendsProvider with ChangeNotifier {
   }
 
   /// Remove friend
-  Future<bool> removeFriend(
-    String userId,
-    String friendId, {
-    Function()? onSuccess,
-  }) async {
+  Future<bool> removeFriend(String currentUserId, String friendId) async {
     try {
-      await _databaseService.removeFriend(userId, friendId);
-      // Remove from friends list
-      _friends.removeWhere((f) => f.id == friendId);
-      // Refresh friends list
-      await loadFriends(userId);
-      // Call onSuccess callback to refresh user data in AuthProvider
-      onSuccess?.call();
+      await _databaseService.removeFriend(currentUserId, friendId);
+
+      // Remove from local friends list
+      _friends.removeWhere((friend) => friend.id == friendId);
+
+      notifyListeners();
       return true;
     } catch (e) {
       _errorMessage = e.toString();
