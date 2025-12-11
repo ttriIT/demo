@@ -4,11 +4,12 @@ import 'package:flutter/foundation.dart';
 import '../../data/models/user_model.dart';
 import '../../data/services/auth_service.dart';
 import '../../data/services/storage_service.dart';
+import '../../data/services/database_service.dart';
 
 /// Authentication state provider
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
-  
+
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -108,7 +109,7 @@ class AuthProvider with ChangeNotifier {
         name: name,
         avatarUrl: avatarUrl,
       );
-      
+
       // Refresh user data
       _currentUser = await _authService.getCurrentUser();
       _setLoading(false);
@@ -123,20 +124,29 @@ class AuthProvider with ChangeNotifier {
   }
 
   /// Upload avatar image
-  Future<String> uploadAvatar(File imageFile) async {
+  Future<void> updateAvatar(File imageFile) async {
     if (_currentUser == null) {
-      throw Exception('User not authenticated');
+      throw Exception('No user logged in');
     }
 
     try {
       final storageService = StorageService();
-      final avatarUrl = await storageService.uploadAvatar(
-        imageFile,
+      final databaseService = DatabaseService();
+      
+      // Upload avatar to storage
+      final avatarUrl = await storageService.updateUserAvatar(
+        imageFile.path,  // Pass the File object, not the path
         _currentUser!.id,
       );
-      return avatarUrl;
+
+      // Update user's avatar URL in database
+      await databaseService.updateUserAvatar(_currentUser!.id, imageFile.path);
+
+      // Update local user data
+      _currentUser = await _authService.getCurrentUser();
+      notifyListeners();
     } catch (e) {
-      throw Exception('Failed to upload avatar: ${e.toString()}');
+      throw Exception('Failed to update avatar: ${e.toString()}');
     }
   }
 
@@ -185,7 +195,7 @@ class AuthProvider with ChangeNotifier {
   /// Helper to set online status in DB
   Future<void> _setOnlineStatus(bool isOnline) async {
     if (_currentUser == null) return;
-    
+
     try {
       await _authService.updateProfile(
         userId: _currentUser!.id,

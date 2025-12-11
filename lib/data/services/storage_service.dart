@@ -8,22 +8,16 @@ class StorageService {
   final AppwriteService _appwrite = AppwriteService();
 
   /// Upload avatar image
-  Future<String> uploadAvatar(File file, String userId) async {
+  Future<void> updateUserAvatar(String userId, String avatarUrl) async {
     try {
-      final hasPermission = await _checkPermission();
-      if (!hasPermission) {
-        throw Exception('Storage permission denied');
-      }
-
-      final result = await _appwrite.storage.createFile(
-        bucketId: '67584144002621980862', // TODO: Move to AppConstants
-        fileId: ID.unique(),
-        file: InputFile.fromPath(path: file.path, filename: 'avatar_$userId.jpg'),
+      await _appwrite.databases.updateDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.usersCollectionId,
+        documentId: userId,
+        data: {'avatarUrl': avatarUrl},
       );
-
-      return 'https://cloud.appwrite.io/v1/storage/buckets/67584144002621980862/files/${result.$id}/view?project=692ea196003c16a4b465';
     } catch (e) {
-      throw Exception('Failed to upload avatar: ${e.toString()}');
+      throw Exception('Failed to update avatar: ${e.toString()}');
     }
   }
 

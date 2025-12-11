@@ -340,6 +340,20 @@ class DatabaseService {
     }
   }
 
+  /// Update user's avatar URL
+  Future<void> updateUserAvatar(String userId, String avatarUrl) async {
+    try {
+      await _appwrite.databases.updateDocument(
+        databaseId: AppConstants.databaseId,
+        collectionId: AppConstants.usersCollectionId,
+        documentId: userId,
+        data: {'avatarUrl': avatarUrl},
+      );
+    } catch (e) {
+      throw Exception('Failed to update avatar: ${e.toString()}');
+    }
+  }
+
   /// Remove friend from both users
   Future<void> removeFriend(String userId, String friendId) async {
     try {

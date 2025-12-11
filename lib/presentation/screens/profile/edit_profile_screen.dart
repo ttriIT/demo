@@ -71,7 +71,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     // Upload image if selected
     if (_selectedImage != null) {
       try {
-        avatarUrl = await authProvider.uploadAvatar(_selectedImage!);
+        await authProvider.updateAvatar(_selectedImage!);
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
